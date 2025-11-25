@@ -8,7 +8,7 @@ import sys
 from pathlib import Path
 
 
-def trim_hdf5(input_file, output_file, start=0, end=None):
+def trim_hdf5(input_file, output_file, start=0, end=None, force=False):
     """
     Trim an HDF5 file to a specific range of rows.
     
@@ -17,7 +17,13 @@ def trim_hdf5(input_file, output_file, start=0, end=None):
         output_file: Path to output HDF5 file
         start: Starting row index (default: 0)
         end: Ending row index (default: None, means all rows from start)
+        force: Whether to overwrite existing output file (default: False)
     """
+    # Check if output file exists and force flag is not set
+    if Path(output_file).exists() and not force:
+        print(f"Error: Output file '{output_file}' already exists. Use --force to overwrite.", file=sys.stderr)
+        sys.exit(1)
+    
     try:
         with h5py.File(input_file, 'r') as src:
             with h5py.File(output_file, 'w') as dst:
@@ -82,6 +88,9 @@ Examples:
     group.add_argument('-R', '--range', nargs=2, type=int, metavar=('START', 'END'),
                       help='Range of rows to extract (e.g., --range 50 150)')
     
+    parser.add_argument('-f', '--force', action='store_true',
+                      help='Force overwrite if output file already exists')
+    
     args = parser.parse_args()
     
     # Check input file exists
@@ -101,7 +110,7 @@ Examples:
             sys.exit(1)
     
     print(f"Trimming '{args.input}' from row {start} to {end}...")
-    trim_hdf5(args.input, args.output, start, end)
+    trim_hdf5(args.input, args.output, start, end, force=args.force)
 
 
 if __name__ == '__main__':
