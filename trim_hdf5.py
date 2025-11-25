@@ -30,38 +30,66 @@ def trim_hdf5(input_file, output_file, start=0, end=None, force=False):
                 for key, value in src.attrs.items():
                     dst.attrs[key] = value
                 
-                # Process each dataset
-                def copy_item(name, obj):
-                    if isinstance(obj, h5py.Group):
-                        # Create group and copy its attributes
-                        grp = dst.create_group(name)
-                        for key, value in obj.attrs.items():
-                            grp.attrs[key] = value
-                    elif isinstance(obj, h5py.Dataset):
-                        if len(obj.shape) > 0:
-                            # Determine the end index
-                            actual_end = end if end is not None else obj.shape[0]
+                # Recursive function to copy the entire hierarchy
+                def copy_structure(src_group, dst_group, path=""):
+                    # Iterate through items in the source group
+                    for key in src_group.keys():
+                        src_item = src_group[key]
+                        item_path = f"{path}/{key}" if path else key
+                        
+                        if isinstance(src_item, h5py.Group):
+                            # Create group in destination and copy its attributes
+                            dst_grp = dst_group.create_group(key)
+                            for attr_key, attr_value in src_item.attrs.items():
+                                dst_grp.attrs[attr_key] = attr_value
                             
-                            # Trim the dataset
-                            trimmed_data = obj[start:actual_end]
+                            # Recursively copy the group's contents
+                            copy_structure(src_item, dst_grp, item_path)
                             
-                            # Create new dataset with trimmed data
-                            dst.create_dataset(name, data=trimmed_data, 
-                                             compression=obj.compression,
-                                             compression_opts=obj.compression_opts)
-                            
-                            # Copy dataset attributes
-                            for key, value in obj.attrs.items():
-                                dst[name].attrs[key] = value
-                            
-                            print(f"Trimmed '{name}': {obj.shape[0]} -> {trimmed_data.shape[0]} rows")
-                        else:
-                            # Copy scalar datasets as-is
-                            dst.create_dataset(name, data=obj[()])
-                            for key, value in obj.attrs.items():
-                                dst[name].attrs[key] = value
+                        elif isinstance(src_item, h5py.Dataset):
+                            try:
+                                if len(src_item.shape) > 0 and src_item.shape[0] > 0:
+                                    # Determine the end index
+                                    actual_end = end if end is not None else src_item.shape[0]
+                                    
+                                    # Only trim if we're actually reducing the size
+                                    if actual_end < src_item.shape[0]:
+                                        # Trim the dataset
+                                        trimmed_data = src_item[start:actual_end]
+                                        
+                                        # Create new dataset with trimmed data
+                                        dst_group.create_dataset(key, data=trimmed_data, 
+                                                               compression=src_item.compression,
+                                                               compression_opts=src_item.compression_opts)
+                                        
+                                        # Copy dataset attributes
+                                        for attr_key, attr_value in src_item.attrs.items():
+                                            dst_group[key].attrs[attr_key] = attr_value
+                                        
+                                        print(f"Trimmed '{item_path}': {src_item.shape[0]} -> {trimmed_data.shape[0]} rows")
+                                    else:
+                                        # Copy entire dataset (no trimming needed)
+                                        data = src_item[:]
+                                        dst_group.create_dataset(key, data=data, 
+                                                               compression=src_item.compression,
+                                                               compression_opts=src_item.compression_opts)
+                                        
+                                        # Copy dataset attributes
+                                        for attr_key, attr_value in src_item.attrs.items():
+                                            dst_group[key].attrs[attr_key] = attr_value
+                                        
+                                        print(f"Copied '{item_path}': {src_item.shape[0]} rows (no trimming)")
+                                else:
+                                    # Copy scalar datasets as-is
+                                    dst_group.create_dataset(key, data=src_item[()])
+                                    for attr_key, attr_value in src_item.attrs.items():
+                                        dst_group[key].attrs[attr_key] = attr_value
+                            except Exception as e:
+                                print(f"Warning: Could not copy dataset '{item_path}': {e}")
+                                # Continue processing other datasets
                 
-                src.visititems(copy_item)
+                # Start recursive copy from root
+                copy_structure(src, dst)
         
         print(f"\nSuccessfully created trimmed file: {output_file}")
         
