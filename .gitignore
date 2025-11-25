@@ -8,8 +8,8 @@ __pycache__/
 *.so
 
 # HDF5 files (optional - uncomment if you don't want to track .h5 files)
-# *.h5
-# *.hdf5
+*.h5
+*.hdf5
 
 # IDE
 .vscode/
