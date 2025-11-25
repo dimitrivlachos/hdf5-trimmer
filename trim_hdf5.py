@@ -31,31 +31,37 @@ def trim_hdf5(input_file, output_file, start=0, end=None, force=False):
                     dst.attrs[key] = value
                 
                 # Process each dataset
-                for name in src.keys():
-                    dataset = src[name]
-                    
-                    if len(dataset.shape) > 0:
-                        # Determine the end index
-                        actual_end = end if end is not None else dataset.shape[0]
-                        
-                        # Trim the dataset
-                        trimmed_data = dataset[start:actual_end]
-                        
-                        # Create new dataset with trimmed data
-                        dst.create_dataset(name, data=trimmed_data, 
-                                         compression=dataset.compression,
-                                         compression_opts=dataset.compression_opts)
-                        
-                        # Copy dataset attributes
-                        for key, value in dataset.attrs.items():
-                            dst[name].attrs[key] = value
-                        
-                        print(f"Trimmed '{name}': {dataset.shape[0]} -> {trimmed_data.shape[0]} rows")
-                    else:
-                        # Copy scalar datasets as-is
-                        dst.create_dataset(name, data=dataset[()])
-                        for key, value in dataset.attrs.items():
-                            dst[name].attrs[key] = value
+                def copy_item(name, obj):
+                    if isinstance(obj, h5py.Group):
+                        # Create group and copy its attributes
+                        grp = dst.create_group(name)
+                        for key, value in obj.attrs.items():
+                            grp.attrs[key] = value
+                    elif isinstance(obj, h5py.Dataset):
+                        if len(obj.shape) > 0:
+                            # Determine the end index
+                            actual_end = end if end is not None else obj.shape[0]
+                            
+                            # Trim the dataset
+                            trimmed_data = obj[start:actual_end]
+                            
+                            # Create new dataset with trimmed data
+                            dst.create_dataset(name, data=trimmed_data, 
+                                             compression=obj.compression,
+                                             compression_opts=obj.compression_opts)
+                            
+                            # Copy dataset attributes
+                            for key, value in obj.attrs.items():
+                                dst[name].attrs[key] = value
+                            
+                            print(f"Trimmed '{name}': {obj.shape[0]} -> {trimmed_data.shape[0]} rows")
+                        else:
+                            # Copy scalar datasets as-is
+                            dst.create_dataset(name, data=obj[()])
+                            for key, value in obj.attrs.items():
+                                dst[name].attrs[key] = value
+                
+                src.visititems(copy_item)
         
         print(f"\nSuccessfully created trimmed file: {output_file}")
         
