@@ -1,4 +1,3 @@
-#!/usr/bin/env -S "$(dirname "$0")/ENV/bin/python3"
 """
 Script to trim HDF5 files to a specific number of rows or a range of rows.
 """
